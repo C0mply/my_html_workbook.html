@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub User Explorer</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, sans-serif; color: #172033; background: #f2f5fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; }
+    main { max-width: 900px; margin: 32px auto; padding: 32px; border: 1px solid #e2e8f0; border-radius: 18px; background: white; }
+    h1 { margin: 8px 0 12px; font-size: clamp(26px, 5vw, 36px); }
+    .eyebrow { margin: 0; color: #1d4ed8; font-size: 12px; font-weight: bold; letter-spacing: 2px; }
+    .intro, .hint, .meta { color: #64748b; line-height: 1.6; }
+    label { display: block; margin: 28px 0 10px; font-weight: bold; }
+    input { width: 100%; border: 1px solid #cbd5e1; border-radius: 9px; padding: 13px 14px; font: inherit; color: inherit; }
+    .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+    button { padding: 13px 16px; border: 1px solid #cbd5e1; border-radius: 9px; background: #f8fafc; color: #334155; font: inherit; font-weight: bold; cursor: pointer; }
+    button:hover { background: #eaf0ff; border-color: #1d4ed8; }
+    button[aria-pressed="true"] { background: #1d4ed8; border-color: #1d4ed8; color: white; }
+    a { color: #1d4ed8; overflow-wrap: anywhere; }
+    a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+    .hint { font-size: 13px; margin: 10px 0 24px; }
+    #status { min-height: 24px; line-height: 1.5; }
+    #status[data-state="error"] { color: #b91c1c; }
+    #status[data-state="success"] { color: #166534; }
+    .result-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    h2 { margin: 20px 0 12px; font-size: 21px; }
+    #count { padding: 5px 10px; border-radius: 20px; background: #eaf0ff; color: #1d4ed8; font-size: 13px; }
+    #endpoint { display: block; margin-bottom: 16px; font-size: 13px; }
+    #items { padding: 0; margin: 0; list-style: none; display: grid; gap: 10px; }
+    .item { padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .item a { font-weight: bold; }
+    .item p { margin: 8px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
+    .empty { padding: 28px 16px; text-align: center; color: #64748b; background: #f8fafc; border-radius: 10px; }
+    details { margin-top: 20px; }
+    summary { cursor: pointer; color: #334155; font-weight: bold; }
+    pre { max-height: 460px; overflow: auto; padding: 16px; border-radius: 10px; background: #0f172a; color: #e2e8f0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+    footer { margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-size: 13px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 540px) { body { padding: 12px; } main { margin: 12px auto; padding: 22px 18px; } .buttons { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">GITHUB ACTIVITY</p>
+    <h1>GitHub User Explorer</h1>
+    <p class="intro">Введите имя пользователя и выберите данные, которые хотите посмотреть.</p>
+    <form id="user-form" novalidate>
+      <label for="username">GitHub User:</label>
+      <input id="username" name="username" type="text" value="C0mply" placeholder="Например, C0mply" maxlength="39" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="input-hint" required>
+      <div class="buttons" aria-label="Разделы GitHub">
+        <button type="submit" data-kind="followers" aria-pressed="false">Followers</button>
+        <button type="submit" data-kind="repos" aria-pressed="false">Repos</button>
+        <button type="submit" data-kind="events" aria-pressed="false">Events</button>
+        <button type="submit" data-kind="gists" aria-pressed="false">Gists</button>
+      </div>
+      <p id="input-hint" class="hint">Followers — подписчики · Repos — репозитории · Events — публичные события · Gists — фрагменты кода.</p>
+    </form>
+    <p id="status" role="status" aria-live="polite">Выберите одну из четырёх кнопок.</p>
+    <section id="results" aria-label="Результаты запроса" aria-busy="false" hidden>
+      <div class="result-heading">
+        <h2 id="result-title"></h2>
+        <span id="count"></span>
+      </div>
+      <a id="endpoint" target="_blank" rel="noopener noreferrer"></a>
+      <ul id="items"></ul>
+      <p id="pagination-note" class="hint" hidden>Показана первая страница, до 100 записей. Следующие страницы доступны по ссылке API с параметром page.</p>
+      <details id="raw-data" hidden>
+        <summary>Полный JSON-ответ</summary>
+        <pre id="json-output" aria-label="JSON response"></pre>
+      </details>
+    </section>
+    <footer><a href="https://github.com/C0mply/my_html_workbook.html" target="_blank" rel="noopener noreferrer">Исходный код на GitHub</a></footer>
+  </main>
+  <script>
+    const form = document.getElementById('user-form');
+    const input = document.getElementById('username');
+    const buttons = [...form.querySelectorAll('button[data-kind]')];
+    const status = document.getElementById('status');
+    const results = document.getElementById('results');
+    const title = document.getElementById('result-title');
+    const count = document.getElementById('count');
+    const endpointLink = document.getElementById('endpoint');
+    const items = document.getElementById('items');
+    const raw = document.getElementById('raw-data');
+    const json = document.getElementById('json-output');
+    const paginationNote = document.getElementById('pagination-note');
+    const sections = {
+      followers: { label: 'Followers', path: 'followers', empty: 'У пользователя пока нет подписчиков.' },
+      repos: { label: 'Repos', path: 'repos', empty: 'У пользователя пока нет публичных репозиториев.' },
+      events: { label: 'Events', path: 'events/public', empty: 'Публичных событий за доступный период нет.' },
+      gists: { label: 'Gists', path: 'gists', empty: 'У пользователя пока нет публичных gists.' }
+    };
+    let activeController = null;
+    let requestId = 0;
+
+    function setStatus(message, state = '') {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function addLink(parent, text, url) {
+      const link = document.createElement('a');
+      link.textContent = text;
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      parent.append(link);
+    }
+
+    function addText(parent, text, className = '') {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = text;
+      paragraph.className = className;
+      parent.append(paragraph);
+    }
+
+    function renderData(kind, data) {
+      const fragment = document.createDocumentFragment();
+      if (data.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'empty';
+        empty.textContent = sections[kind].empty;
+        fragment.append(empty);
+      }
+      for (const entry of data) {
+        const item = document.createElement('li');
+        item.className = 'item';
+        if (kind === 'followers') {
+          addLink(item, entry.login, entry.html_url);
+          addText(item, `ID: ${entry.id}`, 'meta');
+        } else if (kind === 'repos') {
+          addLink(item, entry.full_name, entry.html_url);
+          addText(item, entry.description || 'Описание не указано.');
+          addText(item, `Язык: ${entry.language || 'не указан'} · Звёзды: ${entry.stargazers_count} · Forks: ${entry.forks_count}`, 'meta');
+        } else if (kind === 'events') {
+          const repoName = entry.repo?.name;
+          if (repoName) addLink(item, repoName, `https://github.com/${repoName}`);
+          addText(item, entry.type);
+          const date = new Date(entry.created_at).toLocaleString('ru-RU');
+          addText(item, `${entry.actor?.login || 'GitHub'} · ${date}`, 'meta');
+        } else if (kind === 'gists') {
+          addLink(item, entry.description || `Gist ${entry.id}`, entry.html_url);
+          addText(item, Object.keys(entry.files || {}).join(', ') || 'Нет файлов.');
+          addText(item, `Комментарии: ${entry.comments}`, 'meta');
+        }
+        fragment.append(item);
+      }
+      items.replaceChildren(fragment);
+      json.textContent = JSON.stringify(data, null, 2);
+      raw.hidden = false;
+    }
+
+    input.addEventListener('input', () => {
+      requestId += 1;
+      activeController?.abort();
+      activeController = null;
+      input.removeAttribute('aria-invalid');
+      results.hidden = true;
+      results.setAttribute('aria-busy', 'false');
+      buttons.forEach(button => button.setAttribute('aria-pressed', 'false'));
+      setStatus('Выберите раздел для нового пользователя.');
+    });
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const username = input.value.trim();
+      input.value = username;
+      if (!/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/.test(username) || username.length > 39) {
+        input.setAttribute('aria-invalid', 'true');
+        setStatus('Введите корректное имя GitHub: буквы, цифры и одиночные дефисы, до 39 символов.', 'error');
+        input.focus();
+        return;
+      }
+      input.removeAttribute('aria-invalid');
+      const kind = event.submitter?.dataset.kind || 'repos';
+      const section = sections[kind];
+      const id = ++requestId;
+      activeController?.abort();
+      const controller = new AbortController();
+      activeController = controller;
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const endpoint = `https://api.github.com/users/${encodeURIComponent(username)}/${section.path}?per_page=100&page=1`;
+      buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.kind === kind)));
+      results.hidden = false;
+      results.setAttribute('aria-busy', 'true');
+      title.textContent = `${section.label} · ${username}`;
+      count.textContent = '…';
+      endpointLink.href = endpoint;
+      endpointLink.textContent = `GET ${endpoint}`;
+      items.replaceChildren();
+      raw.hidden = true;
+      raw.open = false;
+      json.textContent = '';
+      paginationNote.hidden = true;
+      setStatus(`Загрузка ${section.label} для ${username}…`);
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: { Accept: 'application/vnd.github+json' },
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          if (response.status === 404) throw new Error('Пользователь не найден. Проверьте имя.');
+          if (response.status === 403 || response.status === 429) throw new Error('GitHub ограничил запросы. Подождите и попробуйте снова.');
+          throw new Error(`Ошибка GitHub: HTTP ${response.status}.`);
+        }
+        const data = await response.json();
+        if (id !== requestId) return;
+        if (!Array.isArray(data)) throw new Error('GitHub вернул неожиданный формат данных.');
+        renderData(kind, data);
+        count.textContent = `Записей: ${data.length}`;
+        paginationNote.hidden = !response.headers.get('Link')?.includes('rel="next"');
+        setStatus(`Готово: HTTP ${response.status}. Получено записей: ${data.length}.`, 'success');
+      } catch (error) {
+        if (id !== requestId) return;
+        count.textContent = 'Ошибка';
+        setStatus(error.name === 'AbortError'
+          ? 'Время ожидания истекло. Попробуйте ещё раз.'
+          : error instanceof TypeError
+            ? 'Не удалось подключиться к GitHub. Проверьте интернет и повторите запрос.'
+            : error.message, 'error');
+      } finally {
+        clearTimeout(timeout);
+        if (id === requestId) {
+          results.setAttribute('aria-busy', 'false');
+          activeController = null;
+        }
+      }
+    });
+  </script>
+</body>
+</html>

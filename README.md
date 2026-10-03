@@ -1,6 +1,25 @@
 # GitHub Activity
 
-A small HTML and JavaScript example of an HTTP **GET** request.
+Two small HTML and JavaScript examples of HTTP **GET** requests.
+
+## GitHub User Explorer
+
+Download `github-user.html` and open it in a browser. Enter a GitHub username (the default is `C0mply`) and click one of the four buttons:
+
+| Button | Public GitHub REST API endpoint |
+| --- | --- |
+| Followers | `https://api.github.com/users/{username}/followers` |
+| Repos | `https://api.github.com/users/{username}/repos` |
+| Events | `https://api.github.com/users/{username}/events/public` |
+| Gists | `https://api.github.com/users/{username}/gists` |
+
+The page shows readable results and the full JSON response. Each request uses `per_page=100&page=1`; a notice appears when another page is available. Events cover the public history available through GitHub's API.
+
+The page handles empty results, unknown usernames, invalid input, request timeouts, and API rate limits. Changing the username clears old results; selecting another button cancels the previous request. No installation or token is required to read public data, but GitHub limits unauthenticated requests.
+
+[GitHub REST API documentation](https://docs.github.com/en/rest)
+
+## Original GET example
 
 ## Sample link
 
